@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Video, ResizeMode } from 'expo-av';
 
 // ============================================
 // Firebase
@@ -51,6 +52,7 @@ export default function App() {
   const [recordings, setRecordings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const videoRef = useRef(null);
   
   // Состояния для камеры
   const [cameraIP, setCameraIP] = useState('192.168.1.100');
@@ -175,6 +177,16 @@ export default function App() {
   };
 
   // ============================================
+  // RTSP URL
+  // ============================================
+  const getRTSPUrl = () => {
+    // Формат RTSP для камер Teruhal Z2
+    // rtsp://[IP]:554/live
+    // или rtsp://[логин]:[пароль]@[IP]:554/live
+    return `rtsp://admin:admin@${cameraIP}:554/live`;
+  };
+
+  // ============================================
   // UI
   // ============================================
   return (
@@ -212,12 +224,33 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* ВИДЕО ПЛЕЙСХОЛДЕР */}
-        <View style={styles.videoPlaceholder}>
-          <Text style={styles.videoPlaceholderText}>
-            {cameraConnected ? '📺 Видео с камеры' : 'Подключите камеру'}
-          </Text>
-          {isRecording && <Text style={styles.recordingIndicator}>🔴 ЗАПИСЬ</Text>}
+        {/* ВИДЕО ПЛЕЕР */}
+        <View style={styles.videoContainer}>
+          {cameraConnected ? (
+            <Video
+              ref={videoRef}
+              style={styles.video}
+              source={{ uri: getRTSPUrl() }}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              isLooping
+              onError={(error) => {
+                console.log('Ошибка видео:', error);
+                Alert.alert('⚠️ Ошибка', 'Не удалось подключиться к RTSP-потоку. Проверьте IP и пароль.');
+              }}
+            />
+          ) : (
+            <View style={styles.videoPlaceholder}>
+              <Text style={styles.videoPlaceholderText}>
+                📺 Подключите камеру
+              </Text>
+            </View>
+          )}
+          {isRecording && (
+            <View style={styles.recordingOverlay}>
+              <Text style={styles.recordingIndicator}>🔴 ЗАПИСЬ</Text>
+            </View>
+          )}
         </View>
 
         {/* УПРАВЛЕНИЕ PTZ */}
@@ -413,11 +446,18 @@ const styles = StyleSheet.create({
     marginRight: 10,
     backgroundColor: '#fff',
   },
-  videoPlaceholder: {
+  videoContainer: {
+    margin: 20,
     height: 200,
     backgroundColor: '#1a1a1a',
-    margin: 20,
     borderRadius: 12,
+    overflow: 'hidden',
+  },
+  video: {
+    flex: 1,
+  },
+  videoPlaceholder: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -425,11 +465,19 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 18,
   },
+  recordingOverlay: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
   recordingIndicator: {
     color: '#ff0000',
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginTop: 10,
   },
   controls: {
     backgroundColor: '#fff',
