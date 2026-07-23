@@ -10,7 +10,7 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import VLCPlayer from 'react-native-vlc-media-player';
+import Video from 'react-native-video';
 
 // ============================================
 // Firebase
@@ -52,7 +52,7 @@ export default function App() {
   const [recordings, setRecordings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const vlcRef = useRef(null);
+  const videoRef = useRef(null);
   
   // Состояния для камеры
   const [cameraIP, setCameraIP] = useState('192.168.0.100');
@@ -224,22 +224,33 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* ВИДЕО ПЛЕЕР (VLC) */}
+        {/* ВИДЕО ПЛЕЕР (React Native Video) */}
         <View style={styles.videoContainer}>
           {cameraConnected ? (
-            <VLCPlayer
-              ref={vlcRef}
+            <Video
+              ref={videoRef}
               style={styles.video}
               source={{ uri: getRTSPUrl() }}
-              initOptions={['--rtsp-tcp']}
+              bufferConfig={{
+                minBufferMs: 15000,
+                maxBufferMs: 50000,
+                bufferForPlaybackMs: 2500,
+                bufferForPlaybackAfterRebufferMs: 5000,
+              }}
+              paused={false}
+              repeat={true}
+              resizeMode="contain"
               onError={(error) => {
-                console.log('VLC Error:', error);
+                console.log('Video Error:', error);
                 setRtspError(true);
                 Alert.alert('⚠️ Ошибка', 'Не удалось подключиться к RTSP-потоку. Проверьте IP и пароль камеры.');
               }}
-              onPlaying={() => {
+              onLoad={() => {
                 console.log('✅ RTSP поток запущен');
                 setRtspError(false);
+              }}
+              onLoadStart={() => {
+                console.log('⏳ Загрузка RTSP потока...');
               }}
             />
           ) : (
