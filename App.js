@@ -23,15 +23,8 @@ import {
 } from 'firebase/database';
 
 // ============================================
-// Google Drive
+// ВАШИ ДАННЫЕ FIREBASE
 // ============================================
-import { google } from 'googleapis';
-
-// ============================================
-// ВАШИ ДАННЫЕ
-// ============================================
-
-// 🔑 Firebase
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAA9wNYkBxznQZ9Bs8KRxOpof37-0joAic",
   authDomain: "cameraappstorage.firebaseapp.com",
@@ -41,23 +34,6 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "115528203000",
   appId: "1:115528203000:web:bdc0eb8d7bf48d6174190d"
 };
-
-// 🔑 Google Drive Service Account
-const SERVICE_ACCOUNT_KEY = {
-  type: "service_account",
-  project_id: "utility-state-503307-n5",
-  private_key_id: "8eee100ca6ffb2b4735722e33be362bba53ad10d",
-  private_key: process.env.GOOGLE_PRIVATE_KEY || "КЛЮЧ_НЕ_НАЙДЕН",
-  client_email: "camera-uploader@utility-state-503307-n5.iam.gserviceaccount.com",
-  client_id: "107317417529573726682",
-  auth_uri: "https://accounts.google.com/o/oauth2/auth",
-  token_uri: "https://oauth2.googleapis.com/token",
-  auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-  client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/camera-uploader%40utility-state-503307-n5.iam.gserviceaccount.com",
-  universe_domain: "googleapis.com"
-};
-
-const GOOGLE_DRIVE_FOLDER_ID = '1-lqE_g1No9YzMXp3r7lvB1xkfX84DdiR';
 
 // ============================================
 
@@ -96,87 +72,39 @@ export default function App() {
   }, []);
 
   // ============================================
-  // ЗАГРУЗКА НА GOOGLE DRIVE
+  // СИМУЛЯЦИЯ ЗАГРУЗКИ НА GOOGLE DRIVE
   // ============================================
-  const uploadToDrive = async (videoPath, cameraName) => {
+  const simulateDriveUpload = async () => {
+    setUploading(true);
     try {
-      if (SERVICE_ACCOUNT_KEY.private_key === "КЛЮЧ_НЕ_НАЙДЕН") {
-        throw new Error('Ключ Google Drive не найден. Добавьте секрет GOOGLE_PRIVATE_KEY');
-      }
-
-      const auth = new google.auth.JWT({
-        email: SERVICE_ACCOUNT_KEY.client_email,
-        key: SERVICE_ACCOUNT_KEY.private_key,
-        scopes: ['https://www.googleapis.com/auth/drive.file'],
-      });
-
-      const drive = google.drive({ version: 'v3', auth });
-
-      const fileInfo = await FileSystem.getInfoAsync(videoPath);
-      if (!fileInfo.exists) {
-        throw new Error('Файл не найден');
-      }
-
-      const fileData = await FileSystem.readAsStringAsync(videoPath, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      const date = new Date();
-      const fileName =
-        `${cameraName}_${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}-${String(date.getMinutes()).padStart(2, '0')}-${String(date.getSeconds()).padStart(2, '0')}.txt`;
-
-      const response = await drive.files.create({
-        requestBody: {
-          name: fileName,
-          parents: [GOOGLE_DRIVE_FOLDER_ID],
-          description: `Тестовый файл от ${date.toLocaleString()}`,
-        },
-        media: {
-          mimeType: 'text/plain',
-          body: Buffer.from(fileData, 'base64'),
-        },
-        fields: 'id, webViewLink, name',
-      });
-
+      // Создаём тестовый файл
+      const testPath = `${FileSystem.documentDirectory}test_upload.txt`;
+      const content = `Тестовый файл\nСоздан: ${new Date().toLocaleString()}\nПриложение: Камера Запись`;
+      
+      await FileSystem.writeAsStringAsync(testPath, content);
+      
+      // Имитируем загрузку на Google Диск (здесь будет реальный API)
+      // Пока просто ждём 2 секунды
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Удаляем временный файл
+      await FileSystem.deleteAsync(testPath);
+      
+      // Сохраняем в Firebase как успешную загрузку
       const recordingsRef = ref(database, 'recordings');
       await push(recordingsRef, {
-        fileName: response.data.name,
-        driveFileId: response.data.id,
-        driveUrl: response.data.webViewLink,
-        cameraName: cameraName,
+        fileName: `test_${Date.now()}.txt`,
+        driveFileId: 'simulated_id',
+        driveUrl: 'https://drive.google.com/simulated',
+        cameraName: 'Тестовая камера',
         timestamp: Date.now(),
         date: new Date().toISOString().split('T')[0],
         type: 'google_drive_test',
+        simulated: true,
       });
-
-      return response.data;
-
-    } catch (error) {
-      console.error('❌ Ошибка загрузки:', error);
-      throw error;
-    }
-  };
-
-  // ============================================
-  // ТЕСТОВАЯ ЗАГРУЗКА
-  // ============================================
-  const testUpload = async () => {
-    setUploading(true);
-    try {
-      const testPath = `${FileSystem.documentDirectory}test_upload.txt`;
-      await FileSystem.writeAsStringAsync(
-        testPath,
-        `Тестовый файл\nСоздан: ${new Date().toLocaleString()}\nПриложение: Камера Запись`
-      );
-
-      const result = await uploadToDrive(testPath, 'Тестовая камера');
-      await FileSystem.deleteAsync(testPath);
-
-      Alert.alert(
-        '✅ Успех!',
-        `Файл загружен на Google Диск\nНазвание: ${result.name}`
-      );
-
+      
+      Alert.alert('✅ Успех!', 'Файл успешно загружен (симуляция)');
+      
     } catch (error) {
       Alert.alert('❌ Ошибка', error.message);
     } finally {
@@ -195,6 +123,7 @@ export default function App() {
       </View>
 
       <ScrollView style={styles.content}>
+        {/* КНОПКА FIREBASE */}
         <TouchableOpacity
           style={[styles.button, styles.firebaseButton]}
           onPress={async () => {
@@ -215,22 +144,25 @@ export default function App() {
           <Text style={styles.buttonText}>📝 Добавить в Firebase</Text>
         </TouchableOpacity>
 
+        {/* КНОПКА GOOGLE DRIVE (СИМУЛЯЦИЯ) */}
         <TouchableOpacity
           style={[styles.button, styles.driveButton]}
-          onPress={testUpload}
+          onPress={simulateDriveUpload}
           disabled={uploading}
         >
           <Text style={styles.buttonText}>
-            {uploading ? '⏳ Загрузка...' : '☁️ Загрузить на Google Диск'}
+            {uploading ? '⏳ Загрузка...' : '☁️ Загрузить на Google Диск (тест)'}
           </Text>
         </TouchableOpacity>
 
+        {/* СТАТУС */}
         <View style={styles.statusContainer}>
           <Text style={styles.statusText}>
             {loading ? '⏳ Загрузка...' : `📋 Записей: ${recordings.length}`}
           </Text>
         </View>
 
+        {/* СПИСОК ЗАПИСЕЙ */}
         <View style={styles.listContainer}>
           <Text style={styles.listTitle}>Последние записи:</Text>
           {recordings.length === 0 ? (
@@ -248,6 +180,9 @@ export default function App() {
                 <Text style={styles.recordingDate}>
                   {new Date(item.timestamp).toLocaleString()}
                 </Text>
+                {item.simulated && (
+                  <Text style={styles.simulatedBadge}>🔵 Симуляция</Text>
+                )}
               </View>
             ))
           )}
@@ -357,5 +292,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     marginTop: 2,
+  },
+  simulatedBadge: {
+    fontSize: 10,
+    color: '#4285F4',
+    marginTop: 2,
+    fontWeight: 'bold',
   },
 });
