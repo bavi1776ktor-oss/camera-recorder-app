@@ -28,7 +28,8 @@
         "CAMERA",
         "RECORD_AUDIO",
         "INTERNET"
-      ]
+      ],
+      "compileSdkVersion": 35
     }
   }
 }
