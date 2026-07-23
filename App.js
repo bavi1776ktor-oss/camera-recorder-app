@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
-import * as FileSystem from 'expo-file-system';
 
 // ============================================
 // Firebase
@@ -38,7 +37,7 @@ const FIREBASE_CONFIG = {
   appId: "1:115528203000:web:bdc0eb8d7bf48d6174190d"
 };
 
-// 🔑 Google Drive Service Account (из вашего JSON)
+// 🔑 Google Drive Service Account
 const SERVICE_ACCOUNT_KEY = {
   type: "service_account",
   project_id: "utility-state-503307-n5",
@@ -59,112 +58,6 @@ const GOOGLE_DRIVE_FOLDER_ID = '1-lqE_g1No9YzMXp3r7lvB1xkfX84DdiR';
 
 const app = initializeApp(FIREBASE_CONFIG);
 const database = getDatabase(app);
-
-// ============================================
-// ФУНКЦИЯ ПОЛУЧЕНИЯ ТОКЕНА ДЛЯ GOOGLE DRIVE
-// ============================================
-const getAccessToken = async () => {
-  try {
-    const privateKey = SERVICE_ACCOUNT_KEY.private_key;
-    if (privateKey === "КЛЮЧ_НЕ_НАЙДЕН") {
-      throw new Error('Ключ Google Drive не найден в секретах');
-    }
-
-    // Создаем JWT
-    const jwtHeader = {
-      alg: 'RS256',
-      typ: 'JWT'
-    };
-
-    const now = Math.floor(Date.now() / 1000);
-    const jwtClaim = {
-      iss: SERVICE_ACCOUNT_KEY.client_email,
-      scope: 'https://www.googleapis.com/auth/drive.file',
-      aud: SERVICE_ACCOUNT_KEY.token_uri,
-      exp: now + 3600,
-      iat: now
-    };
-
-    // Кодируем header и claim в base64url
-    const headerBase64 = btoa(JSON.stringify(jwtHeader))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    const claimBase64 = btoa(JSON.stringify(jwtClaim))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    // Подписываем JWT (пока без реальной подписи)
-    // ВНИМАНИЕ: Для реальной работы нужна криптография с приватным ключом
-    // Это упрощенная версия, которая работает через Google API Client Library
-    
-    // Вместо ручного подписания используем готовый JWT-клиент
-    // но для Expo он не подходит, поэтому пока симуляция
-    
-    console.log('⚠️ Реальная подпись JWT требует библиотеку crypto');
-    console.log('Пока используем симуляцию');
-    
-    return 'simulated_token';
-
-  } catch (error) {
-    console.error('Ошибка получения токена:', error);
-    throw error;
-  }
-};
-
-// ============================================
-// ЗАГРУЗКА НА GOOGLE DRIVE (реальная)
-// ============================================
-const uploadToDrive = async (filePath, fileName) => {
-  try {
-    console.log('📤 Начинаем загрузку...');
-    
-    // 1. Читаем файл
-    const fileInfo = await FileSystem.getInfoAsync(filePath);
-    if (!fileInfo.exists) {
-      throw new Error('Файл не найден');
-    }
-
-    const fileData = await FileSystem.readAsStringAsync(filePath, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    console.log('✅ Файл прочитан, размер:', fileInfo.size);
-
-    // 2. Получаем токен
-    const token = await getAccessToken();
-    
-    if (token === 'simulated_token') {
-      console.log('⚠️ Используем симуляцию загрузки');
-      
-      // Симулируем успешную загрузку
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      return {
-        id: 'simulated_' + Date.now(),
-        name: fileName,
-        webViewLink: 'https://drive.google.com/simulated',
-        simulated: true
-      };
-    }
-
-    // 3. Реальная загрузка через Google Drive API
-    // (будет добавлена позже, когда настроим криптографию)
-    
-    return {
-      id: 'real_' + Date.now(),
-      name: fileName,
-      webViewLink: 'https://drive.google.com/real',
-      simulated: false
-    };
-
-  } catch (error) {
-    console.error('❌ Ошибка загрузки:', error);
-    throw error;
-  }
-};
 
 // ============================================
 // ОСНОВНОЕ ПРИЛОЖЕНИЕ
@@ -216,46 +109,31 @@ export default function App() {
   };
 
   // ============================================
-  // РЕАЛЬНАЯ ЗАГРУЗКА НА GOOGLE DRIVE
+  // СИМУЛЯЦИЯ ЗАГРУЗКИ НА GOOGLE DRIVE
   // ============================================
-  const realUpload = async () => {
+  const simulateUpload = async () => {
     setUploading(true);
     try {
-      // 1. Создаём тестовый файл
-      const testPath = `${FileSystem.documentDirectory}test_upload_${Date.now()}.txt`;
-      const content = `Тестовый файл\nСоздан: ${new Date().toLocaleString()}\nПриложение: Камера Запись\nID: ${Date.now()}`;
+      // Имитация загрузки
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      await FileSystem.writeAsStringAsync(testPath, content);
-      console.log('📝 Файл создан:', testPath);
-
-      // 2. Загружаем на Google Диск
-      const fileName = `test_${Date.now()}.txt`;
-      const result = await uploadToDrive(testPath, fileName);
-
-      // 3. Удаляем временный файл
-      await FileSystem.deleteAsync(testPath);
-      console.log('🗑️ Временный файл удалён');
-
-      // 4. Сохраняем в Firebase
+      // Сохраняем в Firebase
       const recordingsRef = ref(database, 'recordings');
       await push(recordingsRef, {
-        fileName: result.name,
-        driveFileId: result.id,
-        driveUrl: result.webViewLink,
+        fileName: `simulated_${Date.now()}.txt`,
+        driveFileId: 'simulated_id',
+        driveUrl: 'https://drive.google.com/simulated',
         cameraName: 'Тестовая камера',
         timestamp: Date.now(),
         date: new Date().toISOString().split('T')[0],
-        type: 'google_drive_real',
-        simulated: result.simulated || false,
+        type: 'google_drive_test',
+        simulated: true,
       });
-
-      Alert.alert(
-        '✅ Успех!',
-        `Файл загружен на Google Диск\nНазвание: ${result.name}\n${result.simulated ? '🔵 Симуляция' : '🔴 Реальная загрузка'}`
-      );
-
+      
+      Alert.alert('✅ Успех!', 'Симуляция загрузки завершена');
+      
     } catch (error) {
-      Alert.alert('❌ Ошибка', `Не удалось загрузить файл: ${error.message}`);
+      Alert.alert('❌ Ошибка', error.message);
     } finally {
       setUploading(false);
     }
@@ -280,10 +158,10 @@ export default function App() {
           <Text style={styles.buttonText}>📝 Добавить в Firebase</Text>
         </TouchableOpacity>
 
-        {/* КНОПКА GOOGLE DRIVE */}
+        {/* КНОПКА СИМУЛЯЦИИ GOOGLE DRIVE */}
         <TouchableOpacity
           style={[styles.button, styles.driveButton]}
-          onPress={realUpload}
+          onPress={simulateUpload}
           disabled={uploading}
         >
           {uploading ? (
@@ -294,7 +172,7 @@ export default function App() {
               </Text>
             </View>
           ) : (
-            <Text style={styles.buttonText}>☁️ Загрузить на Google Диск</Text>
+            <Text style={styles.buttonText}>☁️ Симуляция загрузки</Text>
           )}
         </TouchableOpacity>
 
@@ -314,8 +192,7 @@ export default function App() {
             recordings.slice(0, 10).map((item) => (
               <View key={item.id} style={styles.recordingItem}>
                 <Text style={styles.recordingText}>
-                  {item.type === 'google_drive_real' ? '☁️ Drive' :
-                   item.type === 'google_drive_test' ? '🔵 Drive(тест)' :
+                  {item.type === 'google_drive_test' ? '☁️ Drive' :
                    item.test ? '🧪 Тест' : '📹 Запись'}
                 </Text>
                 <Text style={styles.recordingSubText}>
