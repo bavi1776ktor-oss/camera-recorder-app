@@ -7,7 +7,6 @@ import {
   Alert,
   TouchableOpacity,
 } from 'react-native';
-import * as FileSystem from 'expo-file-system';
 
 // ============================================
 // Firebase
@@ -72,28 +71,36 @@ export default function App() {
   }, []);
 
   // ============================================
-  // СИМУЛЯЦИЯ ЗАГРУЗКИ НА GOOGLE DRIVE
+  // ДОБАВЛЕНИЕ ТЕСТОВОЙ ЗАПИСИ
   // ============================================
-  const simulateDriveUpload = async () => {
-    setUploading(true);
+  const addTestRecord = async () => {
     try {
-      // Создаём тестовый файл
-      const testPath = `${FileSystem.documentDirectory}test_upload.txt`;
-      const content = `Тестовый файл\nСоздан: ${new Date().toLocaleString()}\nПриложение: Камера Запись`;
-      
-      await FileSystem.writeAsStringAsync(testPath, content);
-      
-      // Имитируем загрузку на Google Диск (здесь будет реальный API)
-      // Пока просто ждём 2 секунды
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Удаляем временный файл
-      await FileSystem.deleteAsync(testPath);
-      
-      // Сохраняем в Firebase как успешную загрузку
       const recordingsRef = ref(database, 'recordings');
       await push(recordingsRef, {
-        fileName: `test_${Date.now()}.txt`,
+        test: true,
+        message: 'Тестовая запись',
+        timestamp: Date.now(),
+        date: new Date().toISOString().split('T')[0],
+      });
+      Alert.alert('✅ Успех!', 'Запись добавлена в Firebase');
+    } catch (error) {
+      Alert.alert('❌ Ошибка', error.message);
+    }
+  };
+
+  // ============================================
+  // СИМУЛЯЦИЯ ЗАГРУЗКИ (без файлов)
+  // ============================================
+  const simulateUpload = async () => {
+    setUploading(true);
+    try {
+      // Имитация загрузки
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Сохраняем в Firebase
+      const recordingsRef = ref(database, 'recordings');
+      await push(recordingsRef, {
+        fileName: `simulated_${Date.now()}.txt`,
         driveFileId: 'simulated_id',
         driveUrl: 'https://drive.google.com/simulated',
         cameraName: 'Тестовая камера',
@@ -103,7 +110,7 @@ export default function App() {
         simulated: true,
       });
       
-      Alert.alert('✅ Успех!', 'Файл успешно загружен (симуляция)');
+      Alert.alert('✅ Успех!', 'Симуляция загрузки завершена');
       
     } catch (error) {
       Alert.alert('❌ Ошибка', error.message);
@@ -126,32 +133,19 @@ export default function App() {
         {/* КНОПКА FIREBASE */}
         <TouchableOpacity
           style={[styles.button, styles.firebaseButton]}
-          onPress={async () => {
-            try {
-              const recordingsRef = ref(database, 'recordings');
-              await push(recordingsRef, {
-                test: true,
-                message: 'Тестовая запись',
-                timestamp: Date.now(),
-                date: new Date().toISOString().split('T')[0],
-              });
-              Alert.alert('✅ Успех!', 'Запись добавлена в Firebase');
-            } catch (error) {
-              Alert.alert('❌ Ошибка', error.message);
-            }
-          }}
+          onPress={addTestRecord}
         >
           <Text style={styles.buttonText}>📝 Добавить в Firebase</Text>
         </TouchableOpacity>
 
-        {/* КНОПКА GOOGLE DRIVE (СИМУЛЯЦИЯ) */}
+        {/* КНОПКА СИМУЛЯЦИИ */}
         <TouchableOpacity
           style={[styles.button, styles.driveButton]}
-          onPress={simulateDriveUpload}
+          onPress={simulateUpload}
           disabled={uploading}
         >
           <Text style={styles.buttonText}>
-            {uploading ? '⏳ Загрузка...' : '☁️ Загрузить на Google Диск (тест)'}
+            {uploading ? '⏳ Загрузка...' : '☁️ Симуляция загрузки'}
           </Text>
         </TouchableOpacity>
 
