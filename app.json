@@ -13,14 +13,22 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourname.camerarecorder"
+      "bundleIdentifier": "com.yourname.camerarecorder",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Приложение использует камеру для записи видео"
+      }
     },
     "android": {
       "package": "com.yourname.camerarecorder",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#072146"
-      }
+      },
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "INTERNET"
+      ]
     }
   }
 }
