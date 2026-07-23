@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -577,21 +577,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  recordingName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  recordingDate: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
-  recordingFile: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-  },
   recordingText: {
     fontSize: 14,
     fontWeight: 'bold',
@@ -600,6 +585,11 @@ const styles = StyleSheet.create({
   recordingSubText: {
     fontSize: 12,
     color: '#666',
+    marginTop: 2,
+  },
+  recordingDate: {
+    fontSize: 12,
+    color: '#999',
     marginTop: 2,
   },
   simulatedBadge: {
