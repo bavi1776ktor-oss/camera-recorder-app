@@ -10,7 +10,7 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Video, ResizeMode } from 'expo-av';
+import VLCPlayer from 'react-native-vlc-media-player';
 
 // ============================================
 // Firebase
@@ -52,13 +52,14 @@ export default function App() {
   const [recordings, setRecordings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const videoRef = useRef(null);
+  const vlcRef = useRef(null);
   
   // Состояния для камеры
-  const [cameraIP, setCameraIP] = useState('192.168.1.100');
+  const [cameraIP, setCameraIP] = useState('192.168.0.100');
   const [cameraConnected, setCameraConnected] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isRecording, setIsRecording] = useState(false);
+  const [rtspError, setRtspError] = useState(false);
 
   // ============================================
   // ЗАГРУЗКА ЗАПИСЕЙ ИЗ FIREBASE
@@ -138,6 +139,7 @@ export default function App() {
       Alert.alert('Ошибка', 'Введите IP адрес камеры');
       return;
     }
+    setRtspError(false);
     setCameraConnected(true);
     Alert.alert('✅ Подключено', `Камера ${cameraIP} подключена`);
   };
@@ -180,9 +182,7 @@ export default function App() {
   // RTSP URL
   // ============================================
   const getRTSPUrl = () => {
-    // Формат RTSP для камер Teruhal Z2
-    // rtsp://[IP]:554/live
-    // или rtsp://[логин]:[пароль]@[IP]:554/live
+    // Стандартный формат для камер Teruhal
     return `rtsp://admin:admin@${cameraIP}:554/live`;
   };
 
@@ -224,19 +224,22 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* ВИДЕО ПЛЕЕР */}
+        {/* ВИДЕО ПЛЕЕР (VLC) */}
         <View style={styles.videoContainer}>
           {cameraConnected ? (
-            <Video
-              ref={videoRef}
+            <VLCPlayer
+              ref={vlcRef}
               style={styles.video}
               source={{ uri: getRTSPUrl() }}
-              useNativeControls
-              resizeMode={ResizeMode.CONTAIN}
-              isLooping
+              initOptions={['--rtsp-tcp']}
               onError={(error) => {
-                console.log('Ошибка видео:', error);
-                Alert.alert('⚠️ Ошибка', 'Не удалось подключиться к RTSP-потоку. Проверьте IP и пароль.');
+                console.log('VLC Error:', error);
+                setRtspError(true);
+                Alert.alert('⚠️ Ошибка', 'Не удалось подключиться к RTSP-потоку. Проверьте IP и пароль камеры.');
+              }}
+              onPlaying={() => {
+                console.log('✅ RTSP поток запущен');
+                setRtspError(false);
               }}
             />
           ) : (
