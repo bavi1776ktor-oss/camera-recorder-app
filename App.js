@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,9 @@ import {
   Alert,
   TouchableOpacity,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // ============================================
 // Firebase
@@ -37,23 +39,6 @@ const FIREBASE_CONFIG = {
   appId: "1:115528203000:web:bdc0eb8d7bf48d6174190d"
 };
 
-// 🔑 Google Drive Service Account
-const SERVICE_ACCOUNT_KEY = {
-  type: "service_account",
-  project_id: "utility-state-503307-n5",
-  private_key_id: "8eee100ca6ffb2b4735722e33be362bba53ad10d",
-  private_key: process.env.GOOGLE_PRIVATE_KEY || "КЛЮЧ_НЕ_НАЙДЕН",
-  client_email: "camera-uploader@utility-state-503307-n5.iam.gserviceaccount.com",
-  client_id: "107317417529573726682",
-  auth_uri: "https://accounts.google.com/o/oauth2/auth",
-  token_uri: "https://oauth2.googleapis.com/token",
-  auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-  client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/camera-uploader%40utility-state-503307-n5.iam.gserviceaccount.com",
-  universe_domain: "googleapis.com"
-};
-
-const GOOGLE_DRIVE_FOLDER_ID = '1-lqE_g1No9YzMXp3r7lvB1xkfX84DdiR';
-
 // ============================================
 
 const app = initializeApp(FIREBASE_CONFIG);
@@ -66,6 +51,12 @@ export default function App() {
   const [recordings, setRecordings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  
+  // Состояния для камеры
+  const [cameraIP, setCameraIP] = useState('192.168.1.100');
+  const [cameraConnected, setCameraConnected] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [isRecording, setIsRecording] = useState(false);
 
   // ============================================
   // ЗАГРУЗКА ЗАПИСЕЙ ИЗ FIREBASE
@@ -114,10 +105,8 @@ export default function App() {
   const simulateUpload = async () => {
     setUploading(true);
     try {
-      // Имитация загрузки
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Сохраняем в Firebase
       const recordingsRef = ref(database, 'recordings');
       await push(recordingsRef, {
         fileName: `simulated_${Date.now()}.txt`,
@@ -140,52 +129,207 @@ export default function App() {
   };
 
   // ============================================
+  // УПРАВЛЕНИЕ КАМЕРОЙ
+  // ============================================
+  const connectCamera = () => {
+    if (!cameraIP) {
+      Alert.alert('Ошибка', 'Введите IP адрес камеры');
+      return;
+    }
+    setCameraConnected(true);
+    Alert.alert('✅ Подключено', `Камера ${cameraIP} подключена`);
+  };
+
+  const moveCamera = (direction) => {
+    if (!cameraConnected) {
+      Alert.alert('Ошибка', 'Сначала подключитесь к камере');
+      return;
+    }
+    Alert.alert('Движение', `Камера движется ${direction}`);
+  };
+
+  const zoomCamera = (type) => {
+    if (!cameraConnected) {
+      Alert.alert('Ошибка', 'Сначала подключитесь к камере');
+      return;
+    }
+    if (type === 'in') {
+      setZoomLevel(Math.min(zoomLevel + 0.5, 5));
+    } else {
+      setZoomLevel(Math.max(zoomLevel - 0.5, 1));
+    }
+  };
+
+  const startRecording = () => {
+    if (!cameraConnected) {
+      Alert.alert('Ошибка', 'Сначала подключитесь к камере');
+      return;
+    }
+    setIsRecording(true);
+    Alert.alert('🔴 Запись начата');
+  };
+
+  const stopRecording = () => {
+    setIsRecording(false);
+    Alert.alert('⏹️ Запись остановлена');
+  };
+
+  // ============================================
   // UI
   // ============================================
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>📹 Камера Запись</Text>
-        <Text style={styles.subtitle}>Teruhal Z2</Text>
-      </View>
+    <SafeAreaView style={styles.container}>
+      <ScrollView>
+        <View style={styles.header}>
+          <Text style={styles.title}>📹 Камера Запись</Text>
+          <Text style={styles.subtitle}>Teruhal Z2</Text>
+        </View>
 
-      <ScrollView style={styles.content}>
-        {/* КНОПКА FIREBASE */}
-        <TouchableOpacity
-          style={[styles.button, styles.firebaseButton]}
-          onPress={addTestRecord}
-        >
-          <Text style={styles.buttonText}>📝 Добавить в Firebase</Text>
-        </TouchableOpacity>
-
-        {/* КНОПКА СИМУЛЯЦИИ GOOGLE DRIVE */}
-        <TouchableOpacity
-          style={[styles.button, styles.driveButton]}
-          onPress={simulateUpload}
-          disabled={uploading}
-        >
-          {uploading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator color="#fff" />
-              <Text style={[styles.buttonText, styles.loadingText]}>
-                ⏳ Загрузка...
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.buttonText}>☁️ Симуляция загрузки</Text>
-          )}
-        </TouchableOpacity>
-
-        {/* СТАТУС */}
-        <View style={styles.statusContainer}>
+        {/* СТАТУС КАМЕРЫ */}
+        <View style={styles.statusBar}>
           <Text style={styles.statusText}>
-            {loading ? '⏳ Загрузка...' : `📋 Записей: ${recordings.length}`}
+            {cameraConnected ? '🟢 Подключена' : '🔴 Не подключена'}
           </Text>
+          <Text style={styles.statusText}>
+            Зум: {zoomLevel.toFixed(1)}x
+          </Text>
+        </View>
+
+        {/* ВВОД IP АДРЕСА */}
+        <View style={styles.ipContainer}>
+          <TextInput
+            style={styles.ipInput}
+            value={cameraIP}
+            onChangeText={setCameraIP}
+            placeholder="Введите IP камеры"
+            keyboardType="numeric"
+          />
+          <TouchableOpacity
+            style={[styles.button, styles.connectButton]}
+            onPress={connectCamera}
+          >
+            <Text style={styles.buttonText}>Подключить</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ВИДЕО ПЛЕЙСХОЛДЕР */}
+        <View style={styles.videoPlaceholder}>
+          <Text style={styles.videoPlaceholderText}>
+            {cameraConnected ? '📺 Видео с камеры' : 'Подключите камеру'}
+          </Text>
+          {isRecording && <Text style={styles.recordingIndicator}>🔴 ЗАПИСЬ</Text>}
+        </View>
+
+        {/* УПРАВЛЕНИЕ PTZ */}
+        <View style={styles.controls}>
+          <Text style={styles.controlsTitle}>Управление камерой</Text>
+          
+          <View style={styles.ptzRow}>
+            <TouchableOpacity
+              style={[styles.ptzButton, styles.ptzUp]}
+              onPress={() => moveCamera('вверх')}
+            >
+              <Text style={styles.ptzButtonText}>▲</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.ptzRow}>
+            <TouchableOpacity
+              style={[styles.ptzButton, styles.ptzLeft]}
+              onPress={() => moveCamera('влево')}
+            >
+              <Text style={styles.ptzButtonText}>◀</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.ptzButton, styles.ptzCenter]}
+              onPress={() => moveCamera('стоп')}
+            >
+              <Text style={styles.ptzButtonText}>⏹</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.ptzButton, styles.ptzRight]}
+              onPress={() => moveCamera('вправо')}
+            >
+              <Text style={styles.ptzButtonText}>▶</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.ptzRow}>
+            <TouchableOpacity
+              style={[styles.ptzButton, styles.ptzDown]}
+              onPress={() => moveCamera('вниз')}
+            >
+              <Text style={styles.ptzButtonText}>▼</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* УПРАВЛЕНИЕ ЗУМОМ */}
+        <View style={styles.zoomControls}>
+          <TouchableOpacity
+            style={[styles.button, styles.zoomOutButton]}
+            onPress={() => zoomCamera('out')}
+          >
+            <Text style={styles.buttonText}>➖ Зум</Text>
+          </TouchableOpacity>
+          <Text style={styles.zoomLevel}>{zoomLevel.toFixed(1)}x</Text>
+          <TouchableOpacity
+            style={[styles.button, styles.zoomInButton]}
+            onPress={() => zoomCamera('in')}
+          >
+            <Text style={styles.buttonText}>Зум ➕</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ЗАПИСЬ */}
+        <View style={styles.recordControls}>
+          {!isRecording ? (
+            <TouchableOpacity
+              style={[styles.button, styles.recordButton]}
+              onPress={startRecording}
+            >
+              <Text style={styles.buttonText}>🔴 Начать запись</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.button, styles.stopButton]}
+              onPress={stopRecording}
+            >
+              <Text style={styles.buttonText}>⏹️ Остановить запись</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* СТАРЫЕ КНОПКИ (Firebase + Drive) */}
+        <View style={styles.oldButtons}>
+          <TouchableOpacity
+            style={[styles.button, styles.firebaseButton]}
+            onPress={addTestRecord}
+          >
+            <Text style={styles.buttonText}>📝 Добавить в Firebase</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.driveButton]}
+            onPress={simulateUpload}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator color="#fff" />
+                <Text style={[styles.buttonText, styles.loadingText]}>
+                  ⏳ Загрузка...
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.buttonText}>☁️ Симуляция загрузки</Text>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* СПИСОК ЗАПИСЕЙ */}
         <View style={styles.listContainer}>
-          <Text style={styles.listTitle}>Последние записи:</Text>
+          <Text style={styles.listTitle}>📋 Записи ({recordings.length})</Text>
           {recordings.length === 0 ? (
             <Text style={styles.emptyText}>Нет записей</Text>
           ) : (
@@ -209,7 +353,7 @@ export default function App() {
           )}
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -237,15 +381,156 @@ const styles = StyleSheet.create({
     color: '#90CAF9',
     marginTop: 4,
   },
-  content: {
-    flex: 1,
+  statusBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  ipContainer: {
+    flexDirection: 'row',
     padding: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    alignItems: 'center',
+  },
+  ipInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    marginRight: 10,
+    backgroundColor: '#fff',
+  },
+  videoPlaceholder: {
+    height: 200,
+    backgroundColor: '#1a1a1a',
+    margin: 20,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoPlaceholderText: {
+    color: '#888',
+    fontSize: 18,
+  },
+  recordingIndicator: {
+    color: '#ff0000',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 10,
+  },
+  controls: {
+    backgroundColor: '#fff',
+    padding: 15,
+    marginHorizontal: 20,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    marginBottom: 10,
+  },
+  controlsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+    color: '#333',
+  },
+  ptzRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  ptzButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    margin: 4,
+  },
+  ptzUp: {
+    backgroundColor: '#4CAF50',
+  },
+  ptzDown: {
+    backgroundColor: '#f44336',
+  },
+  ptzLeft: {
+    backgroundColor: '#2196F3',
+  },
+  ptzRight: {
+    backgroundColor: '#FF9800',
+  },
+  ptzCenter: {
+    backgroundColor: '#9E9E9E',
+  },
+  ptzButtonText: {
+    fontSize: 24,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  zoomControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginHorizontal: 20,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    marginBottom: 10,
+  },
+  zoomLevel: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginHorizontal: 20,
+    minWidth: 50,
+    textAlign: 'center',
+  },
+  recordControls: {
+    paddingVertical: 10,
+    marginHorizontal: 20,
+    marginBottom: 10,
   },
   button: {
     padding: 14,
     borderRadius: 10,
     alignItems: 'center',
-    marginBottom: 12,
+    marginVertical: 4,
+  },
+  connectButton: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 20,
+  },
+  recordButton: {
+    backgroundColor: '#f44336',
+  },
+  stopButton: {
+    backgroundColor: '#9E9E9E',
+  },
+  zoomInButton: {
+    backgroundColor: '#4CAF50',
+    flex: 1,
+  },
+  zoomOutButton: {
+    backgroundColor: '#FF9800',
+    flex: 1,
   },
   firebaseButton: {
     backgroundColor: '#FF6D00',
@@ -265,46 +550,47 @@ const styles = StyleSheet.create({
   loadingText: {
     marginLeft: 10,
   },
-  statusContainer: {
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  statusText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+  oldButtons: {
+    paddingHorizontal: 20,
   },
   listContainer: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    paddingHorizontal: 20,
+    paddingBottom: 30,
   },
   listTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
     marginBottom: 10,
   },
   emptyText: {
     color: '#999',
     textAlign: 'center',
-    padding: 10,
+    marginTop: 10,
   },
   recordingItem: {
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  recordingName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  recordingDate: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  recordingFile: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
   },
   recordingText: {
     fontSize: 14,
@@ -314,11 +600,6 @@ const styles = StyleSheet.create({
   recordingSubText: {
     fontSize: 12,
     color: '#666',
-    marginTop: 2,
-  },
-  recordingDate: {
-    fontSize: 12,
-    color: '#999',
     marginTop: 2,
   },
   simulatedBadge: {
