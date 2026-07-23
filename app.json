@@ -13,14 +13,26 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourname.camerarecorder"
+      "bundleIdentifier": "com.yourname.camerarecorder",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Приложению нужен Bluetooth для настройки камеры",
+        "NSBluetoothPeripheralUsageDescription": "Приложению нужен Bluetooth для настройки камеры"
+      }
     },
     "android": {
       "package": "com.yourname.camerarecorder",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#072146"
-      }
+      },
+      "permissions": [
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_SCAN",
+        "BLUETOOTH_CONNECT",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     }
   }
 }
