@@ -42,7 +42,7 @@ import { google } from 'googleapis';
 // ВАШИ ДАННЫЕ (БЕЗ КЛЮЧЕЙ!)
 // ============================================
 
-// 🔑 Firebase (ваши данные)
+// 🔑 Firebase
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAA9wNYkBxznQZ9Bs8KRxOpof37-0joAic",
   authDomain: "cameraappstorage.firebaseapp.com",
@@ -53,7 +53,7 @@ const FIREBASE_CONFIG = {
   appId: "1:115528203000:web:bdc0eb8d7bf48d6174190d"
 };
 
-// 🔑 Google Drive Service Account (ключ читается из GitHub Secrets)
+// 🔑 Google Drive Service Account
 const SERVICE_ACCOUNT_KEY = {
   type: "service_account",
   project_id: "utility-state-503307-n5",
@@ -68,10 +68,8 @@ const SERVICE_ACCOUNT_KEY = {
   universe_domain: "googleapis.com"
 };
 
-// 📁 ID папки на Google Диске
 const GOOGLE_DRIVE_FOLDER_ID = '1-lqE_g1No9YzMXp3r7lvB1xkfX84DdiR';
 
-// 🌐 Настройки камеры (IP адрес пока неизвестен)
 const CAMERA_CONFIG = {
   ip: '192.168.1.100',
   port: 554,
@@ -80,11 +78,9 @@ const CAMERA_CONFIG = {
 };
 // ============================================
 
-// Инициализация Firebase
 const app = initializeApp(FIREBASE_CONFIG);
 const database = getDatabase(app);
 
-// Bluetooth менеджер
 const bleManager = new BleManager();
 
 // ============================================
@@ -99,7 +95,6 @@ export default function App() {
   const [isZooming, setIsZooming] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
 
-  // Состояния для Bluetooth
   const [scanning, setScanning] = useState(false);
   const [devices, setDevices] = useState([]);
   const [selectedDevice, setSelectedDevice] = useState(null);
@@ -131,9 +126,6 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // ============================================
-  // 2. ЗАГРУЗКА СПИСКА ЗАПИСЕЙ
-  // ============================================
   const loadRecordings = async () => {
     try {
       const dbRef = ref(database);
@@ -153,10 +145,9 @@ export default function App() {
   };
 
   // ============================================
-  // 3. Bluetooth: СКАНИРОВАНИЕ КАМЕР
+  // 2. Bluetooth: СКАНИРОВАНИЕ
   // ============================================
   const scanForCameras = async () => {
-    // Проверяем разрешения на Android
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Ошибка', 'Нужно разрешение на геолокацию для сканирования Bluetooth');
@@ -173,18 +164,15 @@ export default function App() {
         return;
       }
 
-      // Ищем устройства с именем, начинающимся на IPCEI или BJ
       if (device.name && (device.name.startsWith('IPCEI') || device.name.startsWith('BJ'))) {
         console.log('Найдена камера:', device.name);
         setDevices(prev => {
-          // Проверяем, нет ли уже такого устройства
           if (prev.find(d => d.id === device.id)) return prev;
           return [...prev, { id: device.id, name: device.name, device }];
         });
       }
     });
 
-    // Останавливаем сканирование через 10 секунд
     setTimeout(() => {
       bleManager.stopDeviceScan();
       setScanning(false);
@@ -195,7 +183,7 @@ export default function App() {
   };
 
   // ============================================
-  // 4. Bluetooth: ПОДКЛЮЧЕНИЕ К КАМЕРЕ И ОТПРАВКА WI-FI
+  // 3. Bluetooth: ОТПРАВКА WI-FI
   // ============================================
   const connectAndSetupWiFi = async (device) => {
     setLoading(true);
@@ -203,11 +191,9 @@ export default function App() {
       await device.connect();
       await device.discoverAllServicesAndCharacteristics();
 
-      // UUID сервисов и характеристик (стандартные для многих камер)
       const SERVICE_UUID = '0000FFF0-0000-1000-8000-00805F9B34FB';
       const CHAR_UUID = '0000FFF1-0000-1000-8000-00805F9B34FB';
 
-      // Проверяем, есть ли нужный сервис
       const services = await device.services();
       const targetService = services.find(s => s.uuid === SERVICE_UUID);
       
@@ -218,9 +204,12 @@ export default function App() {
         return;
       }
 
-      // Отправляем данные
+      // Кодируем данные (без TextEncoder)
       const data = `${wifiSSID}|${wifiPassword}`;
-      const bytes = new TextEncoder().encode(data);
+      const bytes = [];
+      for (let i = 0; i < data.length; i++) {
+        bytes.push(data.charCodeAt(i));
+      }
 
       await device.writeCharacteristicWithResponse(
         SERVICE_UUID,
@@ -228,7 +217,7 @@ export default function App() {
         bytes
       );
 
-      Alert.alert('✅ Успех!', `Настройки Wi-Fi отправлены на ${device.name}\nКамера подключится к сети ${wifiSSID}`);
+      Alert.alert('✅ Успех!', `Настройки Wi-Fi отправлены на ${device.name}`);
       
       await device.cancelConnection();
       setShowWiFiSetup(false);
@@ -237,7 +226,7 @@ export default function App() {
       setWifiPassword('');
       setDevices([]);
 
-      Alert.alert('📌 Подсказка', 'После подключения камеры к Wi-Fi найдите её IP-адрес в роутере и введите в приложение.');
+      Alert.alert('📌 Подсказка', 'После подключения камеры к Wi-Fi найдите её IP-адрес в роутере.');
 
     } catch (error) {
       console.error('Ошибка настройки:', error);
@@ -248,7 +237,7 @@ export default function App() {
   };
 
   // ============================================
-  // 5. ПОДКЛЮЧЕНИЕ К КАМЕРЕ ПО IP
+  // 4. ПОДКЛЮЧЕНИЕ К КАМЕРЕ
   // ============================================
   const connectCamera = () => {
     setCameraConnected(true);
@@ -256,14 +245,13 @@ export default function App() {
   };
 
   // ============================================
-  // 6. УПРАВЛЕНИЕ КАМЕРОЙ (PTZ + ЗУМ)
+  // 5. УПРАВЛЕНИЕ КАМЕРОЙ
   // ============================================
   const moveCamera = (direction) => {
     if (!cameraConnected) {
       Alert.alert('Ошибка', 'Сначала подключитесь к камере');
       return;
     }
-    console.log(`🔄 Движение: ${direction}`);
     Alert.alert('Движение', `Камера движется ${direction}`);
   };
 
@@ -282,7 +270,7 @@ export default function App() {
   };
 
   // ============================================
-  // 7. ЗАПИСЬ ВИДЕО
+  // 6. ЗАПИСЬ
   // ============================================
   const startRecording = async () => {
     if (!cameraConnected) {
@@ -314,7 +302,7 @@ export default function App() {
   };
 
   // ============================================
-  // 8. ЗАГРУЗКА НА GOOGLE DRIVE
+  // 7. ЗАГРУЗКА НА GOOGLE DRIVE
   // ============================================
   const uploadToDrive = async (videoPath, cameraName) => {
     try {
@@ -374,14 +362,14 @@ export default function App() {
   };
 
   // ============================================
-  // 9. ОТКРЫТЬ ВИДЕО
+  // 8. ОТКРЫТЬ ВИДЕО
   // ============================================
   const openVideo = (url) => {
     Alert.alert('🔗 Видео на Google Диске', url);
   };
 
   // ============================================
-  // 10. UI
+  // 9. UI
   // ============================================
   return (
     <SafeAreaView style={styles.container}>
@@ -400,7 +388,7 @@ export default function App() {
           </Text>
         </View>
 
-        {/* БЛОК НАСТРОЙКИ WI-FI ЧЕРЕЗ BLUETOOTH */}
+        {/* BLUETOOTH НАСТРОЙКА */}
         <View style={styles.wifiSetupContainer}>
           <TouchableOpacity
             style={[styles.button, styles.scanButton]}
@@ -432,7 +420,7 @@ export default function App() {
           )}
         </View>
 
-        {/* МОДАЛ ВВОДА WI-FI */}
+        {/* МОДАЛ WI-FI */}
         <Modal visible={showWiFiSetup} transparent animationType="slide">
           <View style={styles.modalContainer}>
             <View style={styles.modalContent}>
@@ -487,7 +475,7 @@ export default function App() {
           </View>
         </Modal>
 
-        {/* ВВОД IP АДРЕСА */}
+        {/* ВВОД IP */}
         <View style={styles.ipContainer}>
           <TextInput
             style={styles.ipInput}
@@ -512,7 +500,7 @@ export default function App() {
           {isRecording && <Text style={styles.recordingIndicator}>🔴 ЗАПИСЬ</Text>}
         </View>
 
-        {/* УПРАВЛЕНИЕ PTZ */}
+        {/* PTZ */}
         <View style={styles.controls}>
           <View style={styles.ptzRow}>
             <TouchableOpacity style={[styles.ptzButton, styles.ptzUp]} onPress={() => moveCamera('вверх')}>
@@ -537,7 +525,7 @@ export default function App() {
           </View>
         </View>
 
-        {/* ЗУМ */}
+        {/* ZOOM */}
         <View style={styles.zoomControls}>
           <TouchableOpacity style={[styles.button, styles.zoomOutButton]} onPress={() => zoomCamera('out')}>
             <Text style={styles.buttonText}>➖ Зум</Text>
@@ -548,7 +536,7 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* ЗАПИСЬ */}
+        {/* RECORD */}
         <View style={styles.recordControls}>
           {!isRecording ? (
             <TouchableOpacity style={[styles.button, styles.recordButton]} onPress={startRecording}>
@@ -561,7 +549,7 @@ export default function App() {
           )}
         </View>
 
-        {/* СПИСОК ЗАПИСЕЙ */}
+        {/* LIST */}
         <View style={styles.listContainer}>
           <Text style={styles.listTitle}>📋 Записи ({recordings.length})</Text>
           {recordings.length === 0 ? (
@@ -759,7 +747,6 @@ const styles = StyleSheet.create({
   stopButton: { backgroundColor: '#9E9E9E' },
   zoomInButton: { backgroundColor: '#4CAF50', flex: 1 },
   zoomOutButton: { backgroundColor: '#FF9800', flex: 1 },
-  scanButton: { backgroundColor: '#9C27B0' },
   cancelButton: { backgroundColor: '#9E9E9E', flex: 1, marginRight: 8 },
   saveButton: { backgroundColor: '#4CAF50', flex: 1, marginLeft: 8 },
   buttonText: {
