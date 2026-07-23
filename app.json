@@ -29,7 +29,9 @@
         "RECORD_AUDIO",
         "INTERNET"
       ],
-      "compileSdkVersion": 35
+      "compileSdkVersion": 35,
+      "minSdkVersion": 23,
+      "targetSdkVersion": 35
     }
   }
 }
