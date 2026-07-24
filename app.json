@@ -28,7 +28,10 @@
         "CAMERA",
         "RECORD_AUDIO",
         "INTERNET"
-      ]
+      ],
+      "compileSdkVersion": 35,
+      "targetSdkVersion": 35,
+      "minSdkVersion": 23
     },
     "plugins": [
       [
