@@ -29,8 +29,6 @@
         "RECORD_AUDIO",
         "INTERNET"
       ],
-      "compileSdkVersion": 35,
-      "targetSdkVersion": 35,
       "minSdkVersion": 23
     },
     "plugins": [
@@ -39,6 +37,15 @@
         {
           "android": {
             "useExoplayerRtsp": true
+          }
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35
           }
         }
       ]
