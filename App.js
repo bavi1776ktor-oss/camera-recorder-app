@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Video from 'react-native-video';
 
 // ============================================
-// Firebase
+// Firebase (ключи из .env)
 // ============================================
 import { initializeApp } from 'firebase/app';
 import {
@@ -26,17 +26,26 @@ import {
 } from 'firebase/database';
 
 // ============================================
-// ВАШИ ДАННЫЕ
+// Конфигурация из .env
 // ============================================
+import {
+  FIREBASE_API_KEY,
+  FIREBASE_AUTH_DOMAIN,
+  FIREBASE_DATABASE_URL,
+  FIREBASE_PROJECT_ID,
+  FIREBASE_STORAGE_BUCKET,
+  FIREBASE_MESSAGING_SENDER_ID,
+  FIREBASE_APP_ID,
+} from '@env';
 
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAA9wNYkBxznQZ9Bs8KRxOpof37-0joAic",
-  authDomain: "cameraappstorage.firebaseapp.com",
-  databaseURL: "https://cameraappstorage-default-rtdb.firebaseio.com",
-  projectId: "cameraappstorage",
-  storageBucket: "cameraappstorage.firebasestorage.app",
-  messagingSenderId: "115528203000",
-  appId: "1:115528203000:web:bdc0eb8d7bf48d6174190d"
+  apiKey: FIREBASE_API_KEY,
+  authDomain: FIREBASE_AUTH_DOMAIN,
+  databaseURL: FIREBASE_DATABASE_URL,
+  projectId: FIREBASE_PROJECT_ID,
+  storageBucket: FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: FIREBASE_MESSAGING_SENDER_ID,
+  appId: FIREBASE_APP_ID,
 };
 
 // ============================================
