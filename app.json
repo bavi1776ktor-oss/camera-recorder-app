@@ -38,6 +38,16 @@
             "useExoplayerRtsp": true
           }
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 23
+          }
+        }
       ]
     ]
   }
