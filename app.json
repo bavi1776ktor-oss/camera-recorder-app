@@ -13,10 +13,7 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourname.camerarecorder",
-      "infoPlist": {
-        "NSCameraUsageDescription": "Приложение использует камеру для записи видео"
-      }
+      "bundleIdentifier": "com.yourname.camerarecorder"
     },
     "android": {
       "package": "com.yourname.camerarecorder",
@@ -28,15 +25,14 @@
         "CAMERA",
         "RECORD_AUDIO",
         "INTERNET"
-      ],
-      "minSdkVersion": 23
+      ]
     },
     "plugins": [
       [
-        "react-native-video",
+        "react-native-vlc-media-player",
         {
           "android": {
-            "useExoplayerRtsp": true
+            "legacyJetifier": false
           }
         }
       ]
