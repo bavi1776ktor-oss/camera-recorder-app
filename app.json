@@ -1,7 +1,61 @@
 {
   "expo": {
     "name": "Камера Запись",
+    "slug": "camera-recorder"{
+  "expo": {
+    "name": "Камера Запись",
     "slug": "camera-recorder",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#072146"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourname.camerarecorder"
+    },
+    "android": {
+      "package": "com.yourname.camerarecorder",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#072146"
+      },
+      "permissions": [
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_SCAN",
+        "BLUETOOTH_CONNECT",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "RECORD_AUDIO",
+        "INTERNET"
+      ]
+    },
+    "plugins": [
+      [
+        "react-native-vlc-media-player",
+        {
+          "android": {
+            "legacyJetifier": false
+          }
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
+    ]
+  }
+}
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
