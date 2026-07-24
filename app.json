@@ -28,10 +28,17 @@
         "CAMERA",
         "RECORD_AUDIO",
         "INTERNET"
-      ],
-      "compileSdkVersion": 35,
-      "minSdkVersion": 23,
-      "targetSdkVersion": 35
-    }
+      ]
+    },
+    "plugins": [
+      [
+        "react-native-video",
+        {
+          "android": {
+            "useExoplayerRtsp": true
+          }
+        }
+      ]
+    ]
   }
 }
