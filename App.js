@@ -10,11 +10,8 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Video from 'react-native-video';
+import { VLCPlayer } from 'react-native-vlc-media-player';
 
-// ============================================
-// Firebase (ключи из .env)
-// ============================================
 import { initializeApp } from 'firebase/app';
 import {
   getDatabase,
@@ -25,51 +22,30 @@ import {
   onValue,
 } from 'firebase/database';
 
-// ============================================
-// Конфигурация из .env
-// ============================================
-import {
-  FIREBASE_API_KEY,
-  FIREBASE_AUTH_DOMAIN,
-  FIREBASE_DATABASE_URL,
-  FIREBASE_PROJECT_ID,
-  FIREBASE_STORAGE_BUCKET,
-  FIREBASE_MESSAGING_SENDER_ID,
-  FIREBASE_APP_ID,
-} from '@env';
-
 const FIREBASE_CONFIG = {
-  apiKey: FIREBASE_API_KEY,
-  authDomain: FIREBASE_AUTH_DOMAIN,
-  databaseURL: FIREBASE_DATABASE_URL,
-  projectId: FIREBASE_PROJECT_ID,
-  storageBucket: FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: FIREBASE_MESSAGING_SENDER_ID,
-  appId: FIREBASE_APP_ID,
+  apiKey: "AIzaSyAA9wNYkBxznQZ9Bs8KRxOpof37-0joAic",
+  authDomain: "cameraappstorage.firebaseapp.com",
+  databaseURL: "https://cameraappstorage-default-rtdb.firebaseio.com",
+  projectId: "cameraappstorage",
+  storageBucket: "cameraappstorage.firebasestorage.app",
+  messagingSenderId: "115528203000",
+  appId: "1:115528203000:web:bdc0eb8d7bf48d6174190d"
 };
-
-// ============================================
 
 const app = initializeApp(FIREBASE_CONFIG);
 const database = getDatabase(app);
 
-// ============================================
-// ОСНОВНОЕ ПРИЛОЖЕНИЕ
-// ============================================
 export default function App() {
   const [recordings, setRecordings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const videoRef = useRef(null);
+  const vlcRef = useRef(null);
   
   const [cameraIP, setCameraIP] = useState('192.168.0.100');
   const [cameraConnected, setCameraConnected] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isRecording, setIsRecording] = useState(false);
 
-  // ============================================
-  // ЗАГРУЗКА ЗАПИСЕЙ ИЗ FIREBASE
-  // ============================================
   useEffect(() => {
     const recordingsRef = ref(database, 'recordings');
     const unsubscribe = onValue(recordingsRef, (snapshot) => {
@@ -90,9 +66,6 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // ============================================
-  // ДОБАВЛЕНИЕ ТЕСТОВОЙ ЗАПИСИ
-  // ============================================
   const addTestRecord = async () => {
     try {
       const recordingsRef = ref(database, 'recordings');
@@ -108,9 +81,6 @@ export default function App() {
     }
   };
 
-  // ============================================
-  // СИМУЛЯЦИЯ ЗАГРУЗКИ НА GOOGLE DRIVE
-  // ============================================
   const simulateUpload = async () => {
     setUploading(true);
     try {
@@ -137,9 +107,6 @@ export default function App() {
     }
   };
 
-  // ============================================
-  // УПРАВЛЕНИЕ КАМЕРОЙ
-  // ============================================
   const connectCamera = () => {
     if (!cameraIP) {
       Alert.alert('Ошибка', 'Введите IP адрес камеры');
@@ -183,16 +150,10 @@ export default function App() {
     Alert.alert('⏹️ Запись остановлена');
   };
 
-  // ============================================
-  // RTSP URL
-  // ============================================
   const getRTSPUrl = () => {
     return `rtsp://admin:admin@${cameraIP}:554/live`;
   };
 
-  // ============================================
-  // UI
-  // ============================================
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
@@ -228,28 +189,19 @@ export default function App() {
 
         <View style={styles.videoContainer}>
           {cameraConnected ? (
-            <Video
-              ref={videoRef}
+            <VLCPlayer
+              ref={vlcRef}
               style={styles.video}
               source={{ uri: getRTSPUrl() }}
               paused={false}
               repeat={true}
-              resizeMode="contain"
-              bufferConfig={{
-                minBufferMs: 15000,
-                maxBufferMs: 50000,
-                bufferForPlaybackMs: 2500,
-                bufferForPlaybackAfterRebufferMs: 5000,
-              }}
+              videoAspectRatio="16:9"
               onError={(error) => {
-                console.log('Video Error:', error);
+                console.log('VLC Error:', error);
                 Alert.alert('⚠️ Ошибка', 'Не удалось подключиться к RTSP-потоку. Проверьте IP и пароль.');
               }}
-              onLoad={() => {
+              onPlaying={() => {
                 console.log('✅ RTSP поток запущен');
-              }}
-              onLoadStart={() => {
-                console.log('⏳ Загрузка RTSP потока...');
               }}
             />
           ) : (
@@ -353,9 +305,6 @@ export default function App() {
   );
 }
 
-// ============================================
-// СТИЛИ
-// ============================================
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   header: { padding: 20, paddingTop: 50, backgroundColor: '#072146', alignItems: 'center' },
