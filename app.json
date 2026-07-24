@@ -22,10 +22,17 @@
         "backgroundColor": "#072146"
       },
       "permissions": [
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_SCAN",
+        "BLUETOOTH_CONNECT",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
         "CAMERA",
         "RECORD_AUDIO",
         "INTERNET"
-      ]
+      ],
+      "minSdkVersion": 26
     },
     "plugins": [
       [
