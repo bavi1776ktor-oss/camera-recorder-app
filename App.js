@@ -6,22 +6,26 @@ import {
   ScrollView,
   Alert,
   TouchableOpacity,
-  ActivityIndicator,
   TextInput,
+  Switch,
+  ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { VLCPlayer } from 'react-native-vlc-media-player';
+import { BleManager } from 'react-native-ble-plx';
+import * as Location from 'expo-location';
+import * as FileSystem from 'expo-file-system';
 
+// ============================================
+// Firebase
+// ============================================
 import { initializeApp } from 'firebase/app';
-import {
-  getDatabase,
-  ref,
-  push,
-  get,
-  child,
-  onValue,
-} from 'firebase/database';
+import { getDatabase, ref, push, onValue } from 'firebase/database';
 
+// ============================================
+// КОНФИГУРАЦИЯ FIREBASE
+// ============================================
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAA9wNYkBxznQZ9Bs8KRxOpof37-0joAic",
   authDomain: "cameraappstorage.firebaseapp.com",
@@ -32,74 +36,110 @@ const FIREBASE_CONFIG = {
   appId: "1:115528203000:web:bdc0eb8d7bf48d6174190d"
 };
 
+// ============================================
+// ИНИЦИАЛИЗАЦИЯ
+// ============================================
 const app = initializeApp(FIREBASE_CONFIG);
 const database = getDatabase(app);
+const bleManager = new BleManager();
 
+// ============================================
+// ОСНОВНОЕ ПРИЛОЖЕНИЕ
+// ============================================
 export default function App() {
-  const [recordings, setRecordings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const vlcRef = useRef(null);
-  
+  // ===== Состояния =====
   const [cameraIP, setCameraIP] = useState('192.168.0.100');
   const [cameraConnected, setCameraConnected] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(1);
   const [isRecording, setIsRecording] = useState(false);
+  const [devices, setDevices] = useState([]);
+  const [scanning, setScanning] = useState(false);
+  const [recordings, setRecordings] = useState([]);
+  const [nightVision, setNightVision] = useState(false);
+  const [ledOn, setLedOn] = useState(false);
+  const [wifiSSID, setWifiSSID] = useState('');
+  const [wifiPassword, setWifiPassword] = useState('');
+  const [selectedDevice, setSelectedDevice] = useState(null);
+  const [showWifiModal, setShowWifiModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const vlcRef = useRef(null);
 
+  // ===== Загрузка записей из Firebase =====
   useEffect(() => {
     const recordingsRef = ref(database, 'recordings');
     const unsubscribe = onValue(recordingsRef, (snapshot) => {
-      setLoading(false);
       if (snapshot.exists()) {
         const data = snapshot.val();
-        const list = Object.keys(data).map((key) => ({
-          id: key,
-          ...data[key],
-        }));
+        const list = Object.keys(data).map((key) => ({ id: key, ...data[key] }));
         list.sort((a, b) => b.timestamp - a.timestamp);
         setRecordings(list);
-      } else {
-        setRecordings([]);
       }
     });
-
     return () => unsubscribe();
   }, []);
 
-  const addTestRecord = async () => {
-    try {
-      const recordingsRef = ref(database, 'recordings');
-      await push(recordingsRef, {
-        test: true,
-        message: 'Тестовая запись',
-        timestamp: Date.now(),
-        date: new Date().toISOString().split('T')[0],
-      });
-      Alert.alert('✅ Успех!', 'Запись добавлена в Firebase');
-    } catch (error) {
-      Alert.alert('❌ Ошибка', error.message);
+  // ============================================
+  // BLUETOOTH
+  // ============================================
+  const scanForCameras = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Ошибка', 'Нужно разрешение на геолокацию для Bluetooth');
+      return;
     }
+
+    setScanning(true);
+    setDevices([]);
+
+    bleManager.startDeviceScan(null, null, (error, device) => {
+      if (error) {
+        console.log(error);
+        setScanning(false);
+        return;
+      }
+      if (device.name && (device.name.startsWith('IPCEI') || device.name.startsWith('BJ'))) {
+        setDevices(prev => {
+          if (prev.find(d => d.id === device.id)) return prev;
+          return [...prev, { id: device.id, name: device.name }];
+        });
+      }
+    });
+
+    setTimeout(() => {
+      bleManager.stopDeviceScan();
+      setScanning(false);
+    }, 15000);
   };
 
-  const simulateUpload = async () => {
-    setUploading(true);
+  // ===== Отправка Wi-Fi настроек через Bluetooth =====
+  const sendWiFiConfig = async (device) => {
+    if (!wifiSSID || !wifiPassword) {
+      Alert.alert('Ошибка', 'Введите название Wi-Fi и пароль');
+      return;
+    }
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const recordingsRef = ref(database, 'recordings');
-      await push(recordingsRef, {
-        fileName: `simulated_${Date.now()}.txt`,
-        driveFileId: 'simulated_id',
-        driveUrl: 'https://drive.google.com/simulated',
-        cameraName: 'Тестовая камера',
-        timestamp: Date.now(),
-        date: new Date().toISOString().split('T')[0],
-        type: 'google_drive_test',
-        simulated: true,
-      });
-      
-      Alert.alert('✅ Успех!', 'Симуляция загрузки завершена');
-      
+      setUploading(true);
+      await device.connect();
+      await device.discoverAllServicesAndCharacteristics();
+
+      const SERVICE_UUID = '0000FFF0-0000-1000-8000-00805F9B34FB';
+      const CHAR_UUID = '0000FFF1-0000-1000-8000-00805F9B34FB';
+
+      const data = `${wifiSSID}|${wifiPassword}`;
+      const bytes = [];
+      for (let i = 0; i < data.length; i++) {
+        bytes.push(data.charCodeAt(i));
+      }
+
+      await device.writeCharacteristicWithResponse(SERVICE_UUID, CHAR_UUID, bytes);
+      await device.cancelConnection();
+
+      Alert.alert('✅ Успех!', 'Настройки Wi-Fi отправлены. Камера подключается к сети...');
+      setShowWifiModal(false);
+      setSelectedDevice(null);
+      setDevices([]);
+      setWifiSSID('');
+      setWifiPassword('');
     } catch (error) {
       Alert.alert('❌ Ошибка', error.message);
     } finally {
@@ -107,6 +147,9 @@ export default function App() {
     }
   };
 
+  // ============================================
+  // ПОДКЛЮЧЕНИЕ К КАМЕРЕ ПО IP
+  // ============================================
   const connectCamera = () => {
     if (!cameraIP) {
       Alert.alert('Ошибка', 'Введите IP адрес камеры');
@@ -116,26 +159,22 @@ export default function App() {
     Alert.alert('✅ Подключено', `Камера ${cameraIP} подключена`);
   };
 
-  const moveCamera = (direction) => {
+  // ============================================
+  // УПРАВЛЕНИЕ КАМЕРОЙ (HTTP-команды)
+  // ============================================
+  const sendHttpCommand = (command) => {
     if (!cameraConnected) {
       Alert.alert('Ошибка', 'Сначала подключитесь к камере');
       return;
     }
-    Alert.alert('Движение', `Камера движется ${direction}`);
+    // Здесь будет реальный HTTP-запрос к камере
+    console.log(`📤 Команда: ${command}`);
+    Alert.alert('Движение', `Команда: ${command}`);
   };
 
-  const zoomCamera = (type) => {
-    if (!cameraConnected) {
-      Alert.alert('Ошибка', 'Сначала подключитесь к камере');
-      return;
-    }
-    if (type === 'in') {
-      setZoomLevel(Math.min(zoomLevel + 0.5, 5));
-    } else {
-      setZoomLevel(Math.max(zoomLevel - 0.5, 1));
-    }
-  };
-
+  // ============================================
+  // ЗАПИСЬ ВИДЕО И ЗАГРУЗКА В GOOGLE DRIVE
+  // ============================================
   const startRecording = () => {
     if (!cameraConnected) {
       Alert.alert('Ошибка', 'Сначала подключитесь к камере');
@@ -145,32 +184,123 @@ export default function App() {
     Alert.alert('🔴 Запись начата');
   };
 
-  const stopRecording = () => {
+  const stopRecording = async () => {
     setIsRecording(false);
     Alert.alert('⏹️ Запись остановлена');
+
+    try {
+      // Создаём тестовый файл (заглушка)
+      const testPath = `${FileSystem.documentDirectory}recording_${Date.now()}.txt`;
+      await FileSystem.writeAsStringAsync(testPath, 'Тестовая запись видео');
+
+      // Сохраняем в Firebase
+      const recordingsRef = ref(database, 'recordings');
+      await push(recordingsRef, {
+        message: 'Запись с камеры',
+        fileName: `recording_${Date.now()}.txt`,
+        timestamp: Date.now(),
+        date: new Date().toISOString().split('T')[0],
+      });
+
+      // Удаляем временный файл
+      await FileSystem.deleteAsync(testPath);
+
+      Alert.alert('✅ Успех!', 'Запись сохранена в Firebase');
+    } catch (error) {
+      Alert.alert('❌ Ошибка', error.message);
+    }
   };
 
+  // ============================================
+  // ПОЛУЧЕНИЕ RTSP ССЫЛКИ
+  // ============================================
   const getRTSPUrl = () => {
     return `rtsp://admin:admin@${cameraIP}:554/live`;
   };
 
+  // ============================================
+  // UI
+  // ============================================
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
+        {/* HEADER */}
         <View style={styles.header}>
           <Text style={styles.title}>📹 Камера Запись</Text>
           <Text style={styles.subtitle}>Teruhal Z2</Text>
         </View>
 
+        {/* СТАТУС */}
         <View style={styles.statusBar}>
           <Text style={styles.statusText}>
             {cameraConnected ? '🟢 Подключена' : '🔴 Не подключена'}
           </Text>
-          <Text style={styles.statusText}>
-            Зум: {zoomLevel.toFixed(1)}x
-          </Text>
+          <Text style={styles.statusText}>IP: {cameraIP}</Text>
         </View>
 
+        {/* BLUETOOTH СКАНЕР */}
+        <TouchableOpacity style={[styles.button, styles.blueButton]} onPress={scanForCameras} disabled={scanning}>
+          <Text style={styles.buttonText}>
+            {scanning ? '⏳ Поиск...' : '🔍 Найти камеру по Bluetooth'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* СПИСОК НАЙДЕННЫХ КАМЕР */}
+        {devices.length > 0 && (
+          <View style={styles.deviceList}>
+            <Text style={styles.deviceTitle}>Найдены камеры:</Text>
+            {devices.map((device) => (
+              <TouchableOpacity
+                key={device.id}
+                style={styles.deviceItem}
+                onPress={() => {
+                  setSelectedDevice(device);
+                  setShowWifiModal(true);
+                }}
+              >
+                <Text style={styles.deviceText}>📷 {device.name}</Text>
+                <Text style={styles.deviceSubText}>Нажмите для настройки Wi-Fi</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* МОДАЛ НАСТРОЙКИ WI-FI */}
+        <Modal visible={showWifiModal} transparent animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Настройка Wi-Fi</Text>
+              <Text style={styles.modalSubtitle}>Камера: {selectedDevice?.name}</Text>
+
+              <TextInput
+                style={styles.input}
+                placeholder="Название Wi-Fi (SSID)"
+                value={wifiSSID}
+                onChangeText={setWifiSSID}
+                autoCapitalize="none"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Пароль от Wi-Fi"
+                value={wifiPassword}
+                onChangeText={setWifiPassword}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={() => setShowWifiModal(false)}>
+                  <Text style={styles.buttonText}>Отмена</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.button, styles.connectButton]} onPress={() => sendWiFiConfig(selectedDevice)} disabled={uploading}>
+                  <Text style={styles.buttonText}>{uploading ? '⏳ Отправка...' : '✅ Отправить'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ВВОД IP АДРЕСА */}
         <View style={styles.ipContainer}>
           <TextInput
             style={styles.ipInput}
@@ -179,14 +309,12 @@ export default function App() {
             placeholder="Введите IP камеры"
             keyboardType="numeric"
           />
-          <TouchableOpacity
-            style={[styles.button, styles.connectButton]}
-            onPress={connectCamera}
-          >
+          <TouchableOpacity style={[styles.button, styles.connectButton]} onPress={connectCamera}>
             <Text style={styles.buttonText}>Подключить</Text>
           </TouchableOpacity>
         </View>
 
+        {/* ВИДЕО ПЛЕЕР */}
         <View style={styles.videoContainer}>
           {cameraConnected ? (
             <VLCPlayer
@@ -196,13 +324,8 @@ export default function App() {
               paused={false}
               repeat={true}
               videoAspectRatio="16:9"
-              onError={(error) => {
-                console.log('VLC Error:', error);
-                Alert.alert('⚠️ Ошибка', 'Не удалось подключиться к RTSP-потоку. Проверьте IP и пароль.');
-              }}
-              onPlaying={() => {
-                console.log('✅ RTSP поток запущен');
-              }}
+              onError={() => Alert.alert('⚠️ Ошибка', 'Не удалось подключиться к RTSP-потоку')}
+              onPlaying={() => console.log('✅ Видео запущено')}
             />
           ) : (
             <View style={styles.videoPlaceholder}>
@@ -211,49 +334,58 @@ export default function App() {
           )}
           {isRecording && (
             <View style={styles.recordingOverlay}>
-              <Text style={styles.recordingIndicator}>🔴 ЗАПИСЬ</Text>
+              <Text style={styles.recordingText}>🔴 ЗАПИСЬ</Text>
             </View>
           )}
         </View>
 
+        {/* УПРАВЛЕНИЕ PTZ */}
         <View style={styles.controls}>
           <Text style={styles.controlsTitle}>Управление камерой</Text>
-          
           <View style={styles.ptzRow}>
-            <TouchableOpacity style={[styles.ptzButton, styles.ptzUp]} onPress={() => moveCamera('вверх')}>
+            <TouchableOpacity style={[styles.ptzButton, styles.ptzUp]} onPress={() => sendHttpCommand('move_up')}>
               <Text style={styles.ptzButtonText}>▲</Text>
             </TouchableOpacity>
           </View>
-
           <View style={styles.ptzRow}>
-            <TouchableOpacity style={[styles.ptzButton, styles.ptzLeft]} onPress={() => moveCamera('влево')}>
+            <TouchableOpacity style={[styles.ptzButton, styles.ptzLeft]} onPress={() => sendHttpCommand('move_left')}>
               <Text style={styles.ptzButtonText}>◀</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.ptzButton, styles.ptzCenter]} onPress={() => moveCamera('стоп')}>
+            <TouchableOpacity style={[styles.ptzButton, styles.ptzCenter]} onPress={() => sendHttpCommand('stop')}>
               <Text style={styles.ptzButtonText}>⏹</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.ptzButton, styles.ptzRight]} onPress={() => moveCamera('вправо')}>
+            <TouchableOpacity style={[styles.ptzButton, styles.ptzRight]} onPress={() => sendHttpCommand('move_right')}>
               <Text style={styles.ptzButtonText}>▶</Text>
             </TouchableOpacity>
           </View>
-
           <View style={styles.ptzRow}>
-            <TouchableOpacity style={[styles.ptzButton, styles.ptzDown]} onPress={() => moveCamera('вниз')}>
+            <TouchableOpacity style={[styles.ptzButton, styles.ptzDown]} onPress={() => sendHttpCommand('move_down')}>
               <Text style={styles.ptzButtonText}>▼</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.zoomControls}>
-          <TouchableOpacity style={[styles.button, styles.zoomOutButton]} onPress={() => zoomCamera('out')}>
-            <Text style={styles.buttonText}>➖ Зум</Text>
-          </TouchableOpacity>
-          <Text style={styles.zoomLevel}>{zoomLevel.toFixed(1)}x</Text>
-          <TouchableOpacity style={[styles.button, styles.zoomInButton]} onPress={() => zoomCamera('in')}>
-            <Text style={styles.buttonText}>Зум ➕</Text>
-          </TouchableOpacity>
+        {/* НАСТРОЙКИ: ПОДСВЕТКА И НОЧНОЙ РЕЖИМ */}
+        <View style={styles.settingsRow}>
+          <Text style={styles.settingsLabel}>🔦 Подсветка</Text>
+          <Switch
+            value={ledOn}
+            onValueChange={(value) => {
+              setLedOn(value);
+              sendHttpCommand(value ? 'led_on' : 'led_off');
+            }}
+          />
+          <Text style={styles.settingsLabel}>🌙 Ночной режим</Text>
+          <Switch
+            value={nightVision}
+            onValueChange={(value) => {
+              setNightVision(value);
+              sendHttpCommand(value ? 'night_on' : 'night_off');
+            }}
+          />
         </View>
 
+        {/* ЗАПИСЬ */}
         <View style={styles.recordControls}>
           {!isRecording ? (
             <TouchableOpacity style={[styles.button, styles.recordButton]} onPress={startRecording}>
@@ -266,36 +398,16 @@ export default function App() {
           )}
         </View>
 
-        <View style={styles.oldButtons}>
-          <TouchableOpacity style={[styles.button, styles.firebaseButton]} onPress={addTestRecord}>
-            <Text style={styles.buttonText}>📝 Добавить в Firebase</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.button, styles.driveButton]} onPress={simulateUpload} disabled={uploading}>
-            {uploading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator color="#fff" />
-                <Text style={[styles.buttonText, styles.loadingText]}>⏳ Загрузка...</Text>
-              </View>
-            ) : (
-              <Text style={styles.buttonText}>☁️ Симуляция загрузки</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
+        {/* СПИСОК ЗАПИСЕЙ */}
         <View style={styles.listContainer}>
           <Text style={styles.listTitle}>📋 Записи ({recordings.length})</Text>
           {recordings.length === 0 ? (
             <Text style={styles.emptyText}>Нет записей</Text>
           ) : (
-            recordings.slice(0, 10).map((item) => (
+            recordings.slice(0, 20).map((item) => (
               <View key={item.id} style={styles.recordingItem}>
-                <Text style={styles.recordingText}>
-                  {item.type === 'google_drive_test' ? '☁️ Drive' : item.test ? '🧪 Тест' : '📹 Запись'}
-                </Text>
-                <Text style={styles.recordingSubText}>{item.fileName || item.message || 'Без имени'}</Text>
+                <Text style={styles.recordingName}>{item.message || 'Запись'}</Text>
                 <Text style={styles.recordingDate}>{new Date(item.timestamp).toLocaleString()}</Text>
-                {item.simulated && <Text style={styles.simulatedBadge}>🔵 Симуляция</Text>}
               </View>
             ))
           )}
@@ -305,6 +417,9 @@ export default function App() {
   );
 }
 
+// ============================================
+// СТИЛИ
+// ============================================
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   header: { padding: 20, paddingTop: 50, backgroundColor: '#072146', alignItems: 'center' },
@@ -312,6 +427,13 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, color: '#90CAF9', marginTop: 4 },
   statusBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' },
   statusText: { fontSize: 14, fontWeight: 'bold' },
+  button: { padding: 14, borderRadius: 10, alignItems: 'center', marginVertical: 4 },
+  blueButton: { backgroundColor: '#2196F3', marginHorizontal: 20 },
+  connectButton: { backgroundColor: '#4CAF50', paddingHorizontal: 20 },
+  cancelButton: { backgroundColor: '#9E9E9E', flex: 1, marginRight: 8 },
+  recordButton: { backgroundColor: '#f44336', marginHorizontal: 20 },
+  stopButton: { backgroundColor: '#9E9E9E', marginHorizontal: 20 },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   ipContainer: { flexDirection: 'row', padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0', alignItems: 'center' },
   ipInput: { flex: 1, borderWidth: 1, borderColor: '#ccc', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, marginRight: 10, backgroundColor: '#fff' },
   videoContainer: { margin: 20, height: 200, backgroundColor: '#1a1a1a', borderRadius: 12, overflow: 'hidden' },
@@ -319,7 +441,7 @@ const styles = StyleSheet.create({
   videoPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   videoPlaceholderText: { color: '#888', fontSize: 18 },
   recordingOverlay: { position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
-  recordingIndicator: { color: '#ff0000', fontSize: 16, fontWeight: 'bold' },
+  recordingText: { color: '#ff0000', fontSize: 16, fontWeight: 'bold' },
   controls: { backgroundColor: '#fff', padding: 15, marginHorizontal: 20, borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2, marginBottom: 10 },
   controlsTitle: { fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 10, color: '#333' },
   ptzRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
@@ -330,27 +452,24 @@ const styles = StyleSheet.create({
   ptzRight: { backgroundColor: '#FF9800' },
   ptzCenter: { backgroundColor: '#9E9E9E' },
   ptzButtonText: { fontSize: 24, color: '#fff', fontWeight: 'bold' },
-  zoomControls: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 10, marginHorizontal: 20, backgroundColor: '#fff', borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2, marginBottom: 10 },
-  zoomLevel: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 20, minWidth: 50, textAlign: 'center' },
-  recordControls: { paddingVertical: 10, marginHorizontal: 20, marginBottom: 10 },
-  button: { padding: 14, borderRadius: 10, alignItems: 'center', marginVertical: 4 },
-  connectButton: { backgroundColor: '#2196F3', paddingHorizontal: 20 },
-  recordButton: { backgroundColor: '#f44336' },
-  stopButton: { backgroundColor: '#9E9E9E' },
-  zoomInButton: { backgroundColor: '#4CAF50', flex: 1 },
-  zoomOutButton: { backgroundColor: '#FF9800', flex: 1 },
-  firebaseButton: { backgroundColor: '#FF6D00' },
-  driveButton: { backgroundColor: '#4285F4' },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  loadingContainer: { flexDirection: 'row', alignItems: 'center' },
-  loadingText: { marginLeft: 10 },
-  oldButtons: { paddingHorizontal: 20 },
+  settingsRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', padding: 15, backgroundColor: '#fff', marginHorizontal: 20, borderRadius: 12, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  settingsLabel: { fontSize: 14, fontWeight: 'bold', marginHorizontal: 5 },
+  recordControls: { paddingVertical: 10 },
   listContainer: { paddingHorizontal: 20, paddingBottom: 30 },
   listTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
   emptyText: { color: '#999', textAlign: 'center', marginTop: 10 },
   recordingItem: { backgroundColor: '#fff', padding: 15, borderRadius: 8, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  recordingText: { fontSize: 14, fontWeight: 'bold', color: '#333' },
-  recordingSubText: { fontSize: 12, color: '#666', marginTop: 2 },
-  recordingDate: { fontSize: 12, color: '#999', marginTop: 2 },
-  simulatedBadge: { fontSize: 10, color: '#4285F4', marginTop: 2, fontWeight: 'bold' },
+  recordingName: { fontSize: 14, fontWeight: 'bold', color: '#333' },
+  recordingDate: { fontSize: 12, color: '#666', marginTop: 4 },
+  deviceList: { marginHorizontal: 20, marginVertical: 10, padding: 15, backgroundColor: '#fff', borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  deviceTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 10 },
+  deviceItem: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  deviceText: { fontSize: 14, fontWeight: 'bold', color: '#333' },
+  deviceSubText: { fontSize: 12, color: '#999' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#fff', padding: 24, borderRadius: 16, width: '85%' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 8 },
+  modalSubtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 16 },
+  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, fontSize: 16, marginBottom: 12 },
+  modalButtons: { flexDirection: 'row', marginTop: 8 },
 });
