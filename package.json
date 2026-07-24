@@ -18,7 +18,8 @@
     "react-native-dotenv": "^3.4.11"
   },
   "devDependencies": {
-    "@babel/core": "^7.24.0"
+    "@babel/core": "^7.24.0",
+    "eas-cli": "^7.0.0"
   },
   "private": true
 }
