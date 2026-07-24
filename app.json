@@ -28,8 +28,7 @@
         "CAMERA",
         "RECORD_AUDIO",
         "INTERNET"
-      ],
-      "minSdkVersion": 23
+      ]
     },
     "plugins": [
       [
@@ -37,15 +36,6 @@
         {
           "android": {
             "useExoplayerRtsp": true
-          }
-        }
-      ],
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "compileSdkVersion": 35,
-            "targetSdkVersion": 35
           }
         }
       ]
